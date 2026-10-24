@@ -33,7 +33,7 @@ fn parse_existing_dir(s: &str) -> Result<PathBuf, String> {
     }
 }
 
-fn init(dir: &Path) {
+fn sub_cmd_init(dir: &Path) {
     let tasks_dir = dir.join("tasks");
 
     if tasks_dir.exists() {
@@ -71,7 +71,7 @@ fn main() {
 
     match &cli.command {
         Commands::Init { dir } => {
-            init(dir);
+            sub_cmd_init(dir);
         }
     }
 }
