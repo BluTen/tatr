@@ -1,19 +1,17 @@
+use crate::Result;
 use std::env;
 use std::path::PathBuf;
 
-pub(crate) fn generate_huid() -> String {
+pub(crate) fn generate_huid() -> Result<String> {
     let now = time::UtcDateTime::now();
 
     now.format(time::macros::format_description!(
         "[year][month][day]-[hour][minute][second]"
     ))
-    .unwrap_or_else(|err| {
-        eprintln!("Error: Unable to generate HUID from datetime, {}", err);
-        std::process::exit(1);
-    })
+    .map_err(|err| format!("Unable to generate HUID from datetime, {}", err))
 }
 
-pub(crate) fn find_tasks_dir() -> Result<PathBuf, String> {
+pub(crate) fn find_tasks_dir() -> Result<PathBuf> {
     let current_dir =
         env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
 

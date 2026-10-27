@@ -1,3 +1,4 @@
+use crate::Result;
 use std::{borrow::Borrow, collections::HashMap, fs, path::Path, str::FromStr};
 
 #[derive(Clone, Debug)]
@@ -12,7 +13,7 @@ impl Title {
 impl FromStr for Title {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         if s.contains("\n") {
             Err("Title must be single line, found '\\n'.".to_string())
         } else {
@@ -39,7 +40,8 @@ impl Tag {
 impl FromStr for Tag {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    /// Returns `Tag` while making sure the string is a valid identifier
+    fn from_str(s: &str) -> Result<Self> {
         if s.is_empty() {
             return Err("Tag can't be empty string".to_string());
         }
@@ -79,9 +81,9 @@ pub(crate) enum Status {
 impl Status {
     fn to_str(&self) -> &str {
         match self {
-            Self::Open => "open",
-            Self::Closed => "closed",
-            Self::Other(s) => s,
+            Self::Open => "OPEN",
+            Self::Closed => "CLOSED",
+            Self::Other(s) => &s,
         }
     }
 }
@@ -89,11 +91,13 @@ impl Status {
 impl FromStr for Status {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "open" => Ok(Self::Open),
-            "close" => Ok(Self::Closed),
-            _ => Ok(Self::Other(s.to_string())),
+    fn from_str(s: &str) -> Result<Self> {
+        let capitalized = s.to_ascii_uppercase();
+
+        match capitalized.as_str() {
+            "OPEN" => Ok(Self::Open),
+            "CLOSED" => Ok(Self::Closed),
+            _ => Ok(Self::Other(capitalized)),
         }
     }
 }
@@ -140,16 +144,17 @@ impl Task {
         md
     }
 
-    pub(crate) fn save_to_file(&self, path: &Path) {
+    pub(crate) fn save_to_file(&self, path: &Path) -> Result<()> {
         let md = self.to_markdown();
 
-        fs::write(path, md).unwrap_or_else(|err| {
-            eprintln!(
-                "Error: Failed to write markdown file at {:?}\nReason: {}",
+        fs::write(path, md).map_err(|err| {
+            format!(
+                "Error: Failed to write markdown file at {}\nReason: {}",
                 path.display(),
                 err
-            );
-            std::process::exit(1);
-        })
+            )
+        })?;
+
+        Ok(())
     }
 }

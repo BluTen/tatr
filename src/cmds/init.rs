@@ -22,7 +22,7 @@ fn parse_existing_dir(s: &str) -> Result<PathBuf, String> {
     }
 }
 
-pub(crate) fn init(args: InitArgs) {
+pub(crate) fn init(args: InitArgs) -> Result<(), String> {
     let tasks_dir = args.dir.join("tasks");
 
     if tasks_dir.exists() {
@@ -30,17 +30,16 @@ pub(crate) fn init(args: InitArgs) {
             "Warning: The tasks directory at {} already exists. No changes were made.",
             tasks_dir.display()
         );
-        return;
+        return Ok(());
     }
 
-    std::fs::create_dir_all(&tasks_dir).unwrap_or_else(|err| {
-        eprintln!(
-            "Error: Failed to create tasks directory at {}\nReason: {}",
+    std::fs::create_dir_all(&tasks_dir).map_err(|err| {
+        format!(
+            "Failed to create tasks directory at {}\nReason: {}",
             tasks_dir.display(),
             err
-        );
-        std::process::exit(1);
-    });
+        )
+    })?;
 
     let absolute_tasks_dir = tasks_dir
         .canonicalize()
@@ -53,4 +52,6 @@ pub(crate) fn init(args: InitArgs) {
             println!("Initialized tasks at root {}", parent_path.display());
         }
     }
+
+    Ok(())
 }

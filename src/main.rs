@@ -6,6 +6,8 @@ mod cmds;
 mod task;
 mod utils;
 
+type Result<T> = std::result::Result<T, String>;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub(crate) struct Cli {
@@ -31,13 +33,20 @@ pub(crate) enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Init(args) => cmds::init(args),
 
         Commands::New(args) => cmds::new(args),
 
         Commands::Meow => {
             println!("mrawww!");
+            Ok(())
         }
+    };
+
+    // Just using `?` above would not print the error messages nicely.
+    if let Err(err) = result {
+        eprintln!("Error: {}", err);
+        std::process::exit(1);
     }
 }
