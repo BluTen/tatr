@@ -1,46 +1,20 @@
-use std::path::PathBuf;
+use clap::{Parser, Subcommand};
 
-use clap::{Args, Parser, Subcommand};
+use crate::cmds::*;
 
-mod sub_cmd;
+mod cmds;
 mod task;
 mod utils;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(Args)]
-struct InitArgs {
-    /// the directory to initialize at
-    #[arg(default_value = ".", value_parser = parse_existing_dir)]
-    dir: PathBuf,
-}
-
-#[derive(Args)]
-struct NewArgs {
-    /// Tags to add to task
-    #[arg(short, long, value_delimiter = ',')]
-    tags: Option<Vec<task::Tag>>,
-
-    /// Priority of the task
-    #[arg(short, long, default_value = "50")]
-    priority: u8,
-
-    /// Initial status of the task
-    #[arg(short, long, default_value = "open")]
-    status: task::Status,
-
-    /// Title of the task
-    #[arg(num_args=1..)]
-    title: Vec<String>,
-}
-
 #[derive(Subcommand)]
-enum Commands {
+pub(crate) enum Commands {
     /// Initialize a new tasks directory
     Init(InitArgs),
 
@@ -54,27 +28,13 @@ enum Commands {
     Meow,
 }
 
-fn parse_existing_dir(s: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(s);
-    if !path.exists() {
-        Err(format!("The path '{}' does not exist.", s))
-    } else if !path.is_dir() {
-        Err(format!(
-            "The path '{}' is a file, but a directory was expected.",
-            s
-        ))
-    } else {
-        Ok(path)
-    }
-}
-
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init(args) => sub_cmd::init(args),
+        Commands::Init(args) => cmds::init(args),
 
-        Commands::New(args) => sub_cmd::new(args),
+        Commands::New(args) => cmds::new(args),
 
         Commands::Meow => {
             println!("mrawww!");

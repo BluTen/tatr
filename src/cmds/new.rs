@@ -1,36 +1,23 @@
-use crate::{InitArgs, NewArgs, task, utils};
+use crate::{task, utils};
+use clap::Args;
 
-pub(crate) fn init(args: InitArgs) {
-    let tasks_dir = args.dir.join("tasks");
+#[derive(Args)]
+pub(crate) struct NewArgs {
+    /// Tags to add to task
+    #[arg(short, long, value_delimiter = ',')]
+    tags: Option<Vec<task::Tag>>,
 
-    if tasks_dir.exists() {
-        println!(
-            "Warning: The tasks directory at {:?} already exists. No changes were made.",
-            tasks_dir.display()
-        );
-        return;
-    }
+    /// Priority of the task
+    #[arg(short, long, default_value = "50")]
+    priority: u8,
 
-    std::fs::create_dir_all(&tasks_dir).unwrap_or_else(|err| {
-        eprintln!(
-            "Error: Failed to create tasks directory at {:?}\nReason: {}",
-            tasks_dir.display(),
-            err
-        );
-        std::process::exit(1);
-    });
+    /// Initial status of the task
+    #[arg(short, long, default_value = "open")]
+    status: task::Status,
 
-    let absolute_tasks_dir = tasks_dir
-        .canonicalize()
-        .unwrap_or_else(|_| tasks_dir.clone());
-
-    if let Some(parent_path) = absolute_tasks_dir.parent() {
-        if let Some(parent_name) = parent_path.file_name() {
-            println!("Initialized tasks at {}", parent_name.to_string_lossy());
-        } else {
-            println!("Initialized tasks at root {}", parent_path.display());
-        }
-    }
+    /// Title of the task
+    #[arg(num_args=1..)]
+    title: Vec<String>,
 }
 
 pub(crate) fn new(args: NewArgs) {
