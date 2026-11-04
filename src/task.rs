@@ -1,12 +1,12 @@
-use crate::Result;
-use std::{borrow::Borrow, collections::HashMap, fs, path::Path, str::FromStr};
+use crate::{Result, utils};
+use std::{collections::HashMap, fmt, fs, path::Path, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Title(String);
 
-impl Title {
-    fn to_str(&self) -> &str {
-        &self.0
+impl fmt::Display for Title {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.0)
     }
 }
 
@@ -22,18 +22,12 @@ impl FromStr for Title {
     }
 }
 
-impl Borrow<str> for Title {
-    fn borrow(&self) -> &str {
-        self.to_str() // Return a reference to the inner string
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct Tag(String);
 
-impl Tag {
-    fn to_str(&self) -> &str {
-        &self.0
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.0)
     }
 }
 
@@ -65,25 +59,19 @@ impl FromStr for Tag {
     }
 }
 
-impl Borrow<str> for Tag {
-    fn borrow(&self) -> &str {
-        self.to_str() // Return a reference to the inner string
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Status {
     Open,
     Closed,
     Other(String),
 }
 
-impl Status {
-    fn to_str(&self) -> &str {
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Open => "OPEN",
-            Self::Closed => "CLOSED",
-            Self::Other(s) => &s,
+            Self::Open => write!(f, "OPEN"),
+            Self::Closed => write!(f, "CLOSED"),
+            Self::Other(s) => write!(f, "{}", &s),
         }
     }
 }
@@ -102,6 +90,7 @@ impl FromStr for Status {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Task {
     title: Title,
 
@@ -116,7 +105,7 @@ pub(crate) struct Task {
 
 impl Task {
     pub(crate) fn new(title: Title, status: Status, tags: Vec<Tag>, priority: u8) -> Self {
-        Task {
+        Self {
             title,
             status,
             tags,
@@ -129,11 +118,19 @@ impl Task {
     pub(crate) fn to_markdown(&self) -> String {
         let mut md = String::new();
 
-        md.push_str(&format!("# {}\n\n", self.title.to_str()));
+        md.push_str(&format!("# {}\n\n", self.title));
 
-        md.push_str(&format!("- STATUS: {}\n", self.status.to_str()));
+        md.push_str(&format!("- STATUS: {}\n", self.status));
         md.push_str(&format!("- PRIORITY: {}\n", self.priority));
-        md.push_str(&format!("- TAGS: {}\n", self.tags.join(", ")));
+        md.push_str(&format!("- TAGS: "));
+        for (i, tag) in self.tags.iter().enumerate() {
+            if i > 0 {
+                md.push_str(", ");
+            }
+            use std::fmt::Write;
+            let _ = write!(md, "{}", tag);
+        }
+        md.push('\n');
 
         for (property, value) in self.other_properties.iter() {
             md.push_str(&format!("- {property}: {value}\n"));
@@ -144,12 +141,83 @@ impl Task {
         md
     }
 
+    pub(crate) fn from_markdown(md: &str) -> Result<Self> {
+        let mut lines = md.lines();
+
+        let title_line = lines.next().ok_or("Markdown is empty")?;
+
+        let title = title_line
+            .strip_prefix("#")
+            .ok_or("First line must be a header `# some task title`. Check tatr spec.")?
+            .trim()
+            .parse::<Title>()?;
+
+        let mut status: Option<Status> = None;
+        let mut tags: Vec<Tag> = vec![];
+        let mut priority: Option<u8> = None;
+        let mut other_properties: HashMap<String, String> = HashMap::new();
+        let mut content_lines = vec![];
+
+        // let mut parsing_properties = true;
+        while let Some(line) = lines.next() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if let Some(property_line) = line.strip_prefix("-") {
+                if let Some((property, value)) = property_line.trim().split_once(':') {
+                    let property = property.trim();
+                    let value = value.trim();
+                    match property {
+                        "STATUS" => status = Some(Status::from_str(value)?),
+                        "PRIORITY" => {
+                            priority = Some(value.parse().map_err(|err| {
+                                format!("Priority must be an integer! Not `{}`: {}", value, err)
+                            })?)
+                        }
+
+                        "TAGS" => tags.extend(
+                            value
+                                .split(',')
+                                .map(|tag| tag.trim())
+                                .filter(|tag| !tag.is_empty())
+                                .map(|tag| tag.parse())
+                                .collect::<Result<Vec<Tag>>>()?,
+                        ),
+                        _ => {
+                            let _ = other_properties
+                                .insert(property.to_ascii_uppercase(), value.to_string());
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            // We found something that doesnt start with '-' so we finished parsing properties
+            // and now we eat everthing into the content string.
+            content_lines.push(line);
+            break;
+        }
+
+        content_lines.extend(lines);
+
+        Ok(Self {
+            title,
+            status: status.ok_or("STATUS property not present")?,
+            tags,
+            priority: priority.ok_or("PRIORITY property not present")?,
+            other_properties,
+            content: content_lines.join("\n"),
+        })
+    }
+
     pub(crate) fn save_to_file(&self, path: &Path) -> Result<()> {
         let md = self.to_markdown();
 
         fs::write(path, md).map_err(|err| {
             format!(
-                "Error: Failed to write markdown file at {}\nReason: {}",
+                "Failed to write markdown file at {}\nReason: {}",
                 path.display(),
                 err
             )
@@ -157,4 +225,83 @@ impl Task {
 
         Ok(())
     }
+
+    pub(crate) fn from_file(file: &Path) -> Result<Self> {
+        let file_contents = fs::read_to_string(file)
+            .map_err(|err| format!("Unable to read file at {} Reason: {}", file.display(), err))?;
+
+        let task = Self::from_markdown(file_contents.as_str())
+            .map_err(|err| format!("Markdown Parsing Error: {}", err))?;
+
+        Ok(task)
+    }
+}
+
+pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<Task>> {
+    let mut tasks: Vec<Task> = vec![];
+
+    // if !utils::is_tasks_dir(tasks_path)? {
+    //     return Err("Not a tasks directory. Stopped reading tasks.".to_string());
+    // }
+
+    let dir_childs = tasks_path.read_dir().map_err(|err| {
+        format!(
+            "Unable to get directory contents at {} Reason: {}",
+            tasks_path.display(),
+            err
+        )
+    })?;
+
+    for child in dir_childs {
+        let child = child.map_err(|err| {
+            format!(
+                "Failed while iterating {} directory. Reason {}",
+                tasks_path.display(),
+                err
+            )
+        })?;
+
+        let child_type = match child.file_type() {
+            Ok(ft) => ft,
+            Err(e) => {
+                eprintln!(
+                    "WARNING: Skipped checking metadata of '{}'. Reason: {}",
+                    child.path().display(),
+                    e
+                );
+                continue;
+            }
+        };
+
+        if !child_type.is_dir() {
+            continue;
+        }
+
+        let os_string = child.file_name();
+
+        let Some(child_name) = os_string.to_str() else {
+            eprintln!(
+                "WARNING: Skipped '{}' as it has non-utf8 characters in name.",
+                child.path().display(),
+            );
+            continue;
+        };
+
+        if !utils::is_valid_huid(child_name) {
+            continue;
+        };
+
+        // By now we know that child is a directory holding a TASK.md
+        let task_file = child.path().join("TASK.md");
+
+        let task = match Task::from_file(&task_file) {
+            Ok(task) => task,
+            Err(err) => {
+                eprintln!("WARNING: Skipped '{}'. {}", child.path().display(), err);
+                continue;
+            }
+        };
+        tasks.push(task);
+    }
+    Ok(tasks)
 }
