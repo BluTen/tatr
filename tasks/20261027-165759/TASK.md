@@ -1,7 +1,7 @@
 # add ls command!
 
-- STATUS: OPEN
-- PRIORITY: 50
+- STATUS: CLOSED
+- PRIORITY: 70
 - TAGS: feature, todo
 
 Write a similar command to list tasks that are not closed, but unlike mista zozin's tatr, it wont handle updates. Rather will be a separate command such as `tatr edit` or `tatr update`.

@@ -14,12 +14,16 @@ pub(crate) fn generate_huid() -> Result<String> {
 pub(crate) fn is_valid_huid(huid: &str) -> bool {
     let bytes = huid.as_bytes();
 
-    // 1. Regex: [0-9]{8}-[0-9]{6}
-    // Minimum length must be exactly 15 characters
+    // Example HUID:
+    // 20261215-163529-niansaysmeow
+    // [   date-time ]-[  suffix  ]
+
+    // Minimum length of HUID must be exactly 15 characters
     if bytes.len() < 15 {
         return false;
     }
 
+    // validate just the [date-time] part
     let base_valid = bytes[8] == b'-'
         && bytes[0..8].iter().all(|b| b.is_ascii_digit())
         && bytes[9..15].iter().all(|b| b.is_ascii_digit());
@@ -28,79 +32,72 @@ pub(crate) fn is_valid_huid(huid: &str) -> bool {
         return false;
     }
 
-    // Regex: ? (Optional group)
-    // If it is exactly 15 characters, it matches without the optional suffix
+    // Early return if its just [date-time]
     if bytes.len() == 15 {
         return true;
     }
 
-    // Regex: (- ... )
-    // If it's longer than 15, the optional group MUST begin with a hyphen at index 15
+    // Else check that the next charecter is '-'
     if bytes[15] != b'-' {
         return false;
     }
 
-    // Regex: [a-zA-Z0-9\-]*
-    // The remainder of the string can be alphanumeric or hyphens
+    // And validate suffix to contain just [a-zA-Z0-9\-]
     bytes[16..]
         .iter()
         .all(|b| b.is_ascii_alphanumeric() || *b == b'-')
 }
 
 pub(crate) fn find_tasks_dir() -> Result<PathBuf> {
-    let current_dir =
+    let mut current_dir =
         env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
 
-    for ancestor in current_dir.ancestors() {
-        let potential_tasks_dir = ancestor.join("tasks");
+    let mut depth = 0;
+    loop {
+        let potential_dir = current_dir.join("tasks");
 
-        if is_tasks_dir(&potential_tasks_dir)? {
-            return Ok(potential_tasks_dir);
+        if is_tasks_dir(&potential_dir)? {
+            return Ok(format!("{}tasks/", {
+                if depth == 0 {
+                    "./".to_string()
+                } else {
+                    "../".repeat(depth)
+                }
+            })
+            .into());
         }
+
+        if !current_dir.pop() {
+            return Err("Could not find a 'tasks' directory in this folder or any parent folders. Did you run 'tatr init'? ".to_string());
+        }
+
+        depth += 1;
     }
 
-    Err("Could not find a 'tasks' directory in this folder or any parent folders. Did you run 'tatr init'? ".to_string())
+    // for ancestor in current_dir.ancestors() {
+    //     let potential_tasks_dir = ancestor.join("tasks");
+
+    //     if is_tasks_dir(&potential_tasks_dir)? {
+    //         return Ok(potential_tasks_dir);
+    //     }
+    // }
 }
 
 pub(crate) fn is_tasks_dir(path: &Path) -> Result<bool> {
-    let absolute_path = path.canonicalize().map_err(|err| {
-        format!(
-            "Unable to get absolute path for `{}`. Reason: {}",
-            path.display(),
-            err
-        )
-    })?;
-
-    let path_is_dir = absolute_path
-        .metadata()
-        .map_err(|err| {
-            format!(
-                "Unable to read metadata of path `{}`. Reason: {}",
-                path.display(),
-                err
-            )
-        })?
-        .is_dir();
-
-    let dir_is_called_tasks = absolute_path.ends_with("tasks");
-
-    if dir_is_called_tasks && path_is_dir {
-        Ok(true)
-    } else {
-        Ok(false)
+    if !path.ends_with("tasks") {
+        return Ok(false);
     }
-}
 
-pub(crate) fn is_valid_task_dir(path: &Path) -> Result<bool> {
-    let absolute_path = path.canonicalize().map_err(|err| {
-        format!(
-            "Unable to get absolute path for `{}`. Reason: {}",
+    use std::io::ErrorKind;
+    match path.metadata() {
+        Ok(metadata) => Ok(metadata.is_dir()),
+
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+
+        Err(err) => Err(format!(
+            "Unable to read metadata of path `{}`. Reason: {}",
             path.display(),
             err
-        )
-    })?;
-
-    // if absoluteabsolute_path.pop()
-
-    Ok(false)
+        )),
+    }
 }

@@ -25,7 +25,10 @@ pub(crate) enum Commands {
     /// Will find a task folder from cwd and go up each time it doesn't find one.
     New(NewArgs),
 
-    // Eh dont worry about it
+    /// List tasks
+    Ls(LsArgs),
+
+    /// Eh dont worry about it
     #[command(hide = true)]
     Meow,
 }
@@ -37,6 +40,8 @@ fn main() {
         Commands::Init(args) => cmds::init(args),
 
         Commands::New(args) => cmds::new(args),
+
+        Commands::Ls(args) => cmds::ls(args),
 
         Commands::Meow => {
             println!("mrawww!");

@@ -6,7 +6,7 @@ pub(crate) struct Title(String);
 
 impl fmt::Display for Title {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", &self.0)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -27,7 +27,7 @@ pub(crate) struct Tag(String);
 
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", &self.0)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -69,9 +69,9 @@ pub(crate) enum Status {
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Open => write!(f, "OPEN"),
-            Self::Closed => write!(f, "CLOSED"),
-            Self::Other(s) => write!(f, "{}", &s),
+            Self::Open => fmt::Display::fmt("OPEN", f),
+            Self::Closed => fmt::Display::fmt("CLOSED", f),
+            Self::Other(s) => fmt::Display::fmt(&s, f),
         }
     }
 }
@@ -94,9 +94,9 @@ impl FromStr for Status {
 pub(crate) struct Task {
     title: Title,
 
-    status: Status,
+    pub(crate) status: Status,
     tags: Vec<Tag>,
-    priority: u8,
+    pub(crate) priority: i32,
 
     other_properties: HashMap<String, String>,
 
@@ -104,7 +104,7 @@ pub(crate) struct Task {
 }
 
 impl Task {
-    pub(crate) fn new(title: Title, status: Status, tags: Vec<Tag>, priority: u8) -> Self {
+    pub(crate) fn new(title: Title, status: Status, tags: Vec<Tag>, priority: i32) -> Self {
         Self {
             title,
             status,
@@ -154,7 +154,7 @@ impl Task {
 
         let mut status: Option<Status> = None;
         let mut tags: Vec<Tag> = vec![];
-        let mut priority: Option<u8> = None;
+        let mut priority: Option<i32> = None;
         let mut other_properties: HashMap<String, String> = HashMap::new();
         let mut content_lines = vec![];
 
@@ -237,8 +237,29 @@ impl Task {
     }
 }
 
-pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<Task>> {
-    let mut tasks: Vec<Task> = vec![];
+pub(crate) fn summary_line(task: &Task, path: &str, huid: &str) -> String {
+    let mut formatted_tags = String::new();
+    if !task.tags.is_empty() {
+        formatted_tags.push('[');
+        if let Some((first, rest)) = task.tags.split_first() {
+            formatted_tags.push_str(&first.0);
+
+            for tag in rest {
+                formatted_tags.push_str(", ");
+                formatted_tags.push_str(&tag.0);
+            }
+        }
+        formatted_tags.push(']');
+    };
+
+    format!(
+        "{}{}/TASK.md:1: {:>6} [PRIORITY: {:3}] {} {}",
+        path, huid, task.status, task.priority, formatted_tags, task.title
+    )
+}
+
+pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<(String, Task)>> {
+    let mut tasks: Vec<(String, Task)> = vec![];
 
     // if !utils::is_tasks_dir(tasks_path)? {
     //     return Err("Not a tasks directory. Stopped reading tasks.".to_string());
@@ -279,7 +300,7 @@ pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<Task>> {
 
         let os_string = child.file_name();
 
-        let Some(child_name) = os_string.to_str() else {
+        let Some(task_huid) = os_string.to_str() else {
             eprintln!(
                 "WARNING: Skipped '{}' as it has non-utf8 characters in name.",
                 child.path().display(),
@@ -287,7 +308,7 @@ pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<Task>> {
             continue;
         };
 
-        if !utils::is_valid_huid(child_name) {
+        if !utils::is_valid_huid(task_huid) {
             continue;
         };
 
@@ -301,7 +322,7 @@ pub(crate) fn read_all_tasks(tasks_path: &Path) -> Result<Vec<Task>> {
                 continue;
             }
         };
-        tasks.push(task);
+        tasks.push((task_huid.to_string(), task));
     }
     Ok(tasks)
 }

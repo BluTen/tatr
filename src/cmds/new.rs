@@ -8,8 +8,8 @@ pub(crate) struct NewArgs {
     tags: Option<Vec<task::Tag>>,
 
     /// Priority of the task
-    #[arg(short, long, default_value = "50")]
-    priority: u8,
+    #[arg(short, long, default_value = "999999")]
+    priority: i32,
 
     /// Initial status of the task
     #[arg(short, long, default_value = "open")]
